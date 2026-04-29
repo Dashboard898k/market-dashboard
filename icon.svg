@@ -1,4 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#000000"/>
-  <text x="256" y="390" font-size="360" text-anchor="middle" font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif">📊</text>
+  <!-- Background (no radius — system applies shape for maskable) -->
+  <rect width="512" height="512" fill="#000000"/>
+
+  <!-- Candle 1: Bearish red, medium -->
+  <line x1="124" y1="152" x2="124" y2="208" stroke="#f87171" stroke-width="14" stroke-linecap="round"/>
+  <rect x="84" y="208" width="80" height="132" rx="8" fill="#f87171"/>
+  <line x1="124" y1="340" x2="124" y2="384" stroke="#f87171" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- Candle 2: Bullish green, small -->
+  <line x1="256" y1="190" x2="256" y2="244" stroke="#4ade80" stroke-width="14" stroke-linecap="round"/>
+  <rect x="216" y="244" width="80" height="88" rx="8" fill="#4ade80"/>
+  <line x1="256" y1="332" x2="256" y2="374" stroke="#4ade80" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- Candle 3: Bullish green, large -->
+  <line x1="388" y1="104" x2="388" y2="152" stroke="#4ade80" stroke-width="14" stroke-linecap="round"/>
+  <rect x="348" y="152" width="80" height="176" rx="8" fill="#4ade80"/>
+  <line x1="388" y1="328" x2="388" y2="376" stroke="#4ade80" stroke-width="14" stroke-linecap="round"/>
 </svg>
