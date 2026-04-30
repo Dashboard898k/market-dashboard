@@ -524,11 +524,13 @@
   <!-- Disclaimer -->
   <p class="disclaimer">
     This is not financial advice. For informational purposes only.<br>
-    Data sources: CoinGecko, Alternative.me, Alpha Vantage. Prices may be delayed.
+    Data sources: CoinGecko, Alternative.me, Alpha Vantage, FRED (St. Louis Fed). Prices may be delayed.
   </p>
 
   <script>
-    const AV_KEY = '29GWL7D4NU80CS36';
+    const AV_KEY   = '29GWL7D4NU80CS36';
+    // Free FRED key: research.stlouisfed.org/useraccount/apikeys
+    const FRED_KEY = 'YOUR_FRED_KEY';
 
     // ── Filter buttons ───────────────────────────────────────────────
     const filtersEl = document.querySelector('.filters');
@@ -821,41 +823,65 @@
       applyPuell(issVals[issVals.length - 1] / ma365);
     }
 
-    // SPY daily history — 1 AV call, derives RSI + 200MA for S&P
+    // S&P RSI: AV compact (100 days, free) — enough for RSI-14.
+    // S&P 200MA: AV weekly (1382 weeks, free) — 40-week MA = 200-day MA equivalent.
     async function fetchSPHistory() {
-      const res  = await fetch(
-        `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&outputsize=full&apikey=${AV_KEY}`,
+      // Daily closes for RSI-14
+      const dailyRes = await fetch(
+        `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&outputsize=compact&apikey=${AV_KEY}`,
         { cache: 'no-store' }
       );
-      const ts = (await res.json())['Time Series (Daily)'];
-      if (!ts) throw new Error('AV SPY history: bad response');
-      // AV returns dates newest-first — reverse to chronological order
-      const prices = Object.values(ts).reverse().map(d => parseFloat(d['4. close']));
-      applyRSI   ('spRsiVal', 'spRsiTag', 'spRsiBar', calcRSI(prices));
-      applyMADist('spMaVal',  'spMaTag',  'spMaBar',  calc200MADist(prices));
+      const dailyData = await dailyRes.json();
+      const dailyTS   = dailyData['Time Series (Daily)'];
+      if (!dailyTS) throw new Error('AV SPY daily: ' + (dailyData.Note || dailyData.Information || 'bad response'));
+      const dailyPrices = Object.values(dailyTS).reverse().map(d => parseFloat(d['4. close']));
+      applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', calcRSI(dailyPrices));
+
+      // Weekly closes for 40-week MA (≡ 200-day MA)
+      const weeklyRes = await fetch(
+        `https://www.alphavantage.co/query?function=TIME_SERIES_WEEKLY&symbol=SPY&apikey=${AV_KEY}`,
+        { cache: 'no-store' }
+      );
+      const weeklyData = await weeklyRes.json();
+      const weeklyTS   = weeklyData['Weekly Time Series'];
+      if (!weeklyTS) throw new Error('AV SPY weekly: ' + (weeklyData.Note || weeklyData.Information || 'bad response'));
+      const weeklyPrices = Object.values(weeklyTS).slice(0, 250).reverse().map(d => parseFloat(d['4. close']));
+      // calc200MADist works on any timeframe — here 200 units = 200 weeks, so we use 40 explicitly
+      const ma40  = weeklyPrices.slice(-40).reduce((s, p) => s + p, 0) / 40;
+      const dist  = ((weeklyPrices[weeklyPrices.length - 1] - ma40) / ma40) * 100;
+      applyMADist('spMaVal', 'spMaTag', 'spMaBar', dist);
     }
 
-    // Fed Funds Rate + CPI → macro score 0–100
-    // Lower rates + lower inflation = higher score = more accommodative.
+    // Macro Score from FRED (St. Louis Fed) — free key at research.stlouisfed.org/useraccount/apikeys
+    // Uses FEDFUNDS (monthly Fed Funds rate) and CPIAUCSL (monthly CPI).
     async function fetchMacroData() {
+      if (FRED_KEY === 'YOUR_FRED_KEY') {
+        document.getElementById('macroTag').textContent = 'Add FRED key to enable';
+        document.getElementById('macroTag').style.color = '#475569';
+        return;
+      }
+      const base = 'https://api.stlouisfed.org/fred/series/observations';
+
       const rateRes = await fetch(
-        `https://www.alphavantage.co/query?function=FEDERAL_FUNDS_RATE&interval=monthly&apikey=${AV_KEY}`,
+        `${base}?series_id=FEDFUNDS&sort_order=desc&limit=2&file_type=json&api_key=${FRED_KEY}`,
         { cache: 'no-store' }
       );
       const rateData = await rateRes.json();
-      const fedRate  = parseFloat(rateData.data[0].value);
+      if (!rateData.observations) throw new Error('FRED FEDFUNDS: bad response');
+      const fedRate = parseFloat(rateData.observations[0].value);
 
       const cpiRes = await fetch(
-        `https://www.alphavantage.co/query?function=CPI&interval=monthly&apikey=${AV_KEY}`,
+        `${base}?series_id=CPIAUCSL&sort_order=desc&limit=14&file_type=json&api_key=${FRED_KEY}`,
         { cache: 'no-store' }
       );
-      const cpiData  = await cpiRes.json();
-      const cpiNow   = parseFloat(cpiData.data[0].value);
-      const cpiPrev  = parseFloat(cpiData.data[12].value);
+      const cpiData = await cpiRes.json();
+      if (!cpiData.observations) throw new Error('FRED CPIAUCSL: bad response');
+      const cpiNow  = parseFloat(cpiData.observations[0].value);
+      const cpiPrev = parseFloat(cpiData.observations[12].value);
       const inflation = (cpiNow - cpiPrev) / cpiPrev * 100;
 
       const score = Math.min(100, Math.round(
-        Math.max(0, 50 - fedRate   * 10) +
+        Math.max(0, 50 - fedRate * 10) +
         Math.max(0, 50 - Math.max(0, inflation - 2) * 10)
       ));
       applyMacro(score, fedRate, inflation);
@@ -877,10 +903,12 @@
     // History fetches run once on load — RSI/MA are daily indicators.
     // AV budget: 16 SPY-price calls/day (every 90 min) + 3 history/macro = 19/day.
     async function refreshHistory() {
-      // CoinGecko + CoinMetrics in parallel (no key, no strict rate limit)
+      // CoinGecko + CoinMetrics: parallel, no key, no strict rate limit
       await Promise.allSettled([fetchBtcHistory(), fetchGoldHistory(), fetchOnChain()]);
-      // AV calls sequential to respect 5-calls/min rate limit
+      // AV: fetchSPHistory makes 2 calls (daily + weekly) — run alone, then wait
+      // before fetchMacroData to avoid hitting the 5-calls/min AV rate limit.
       await Promise.allSettled([fetchSPHistory()]);
+      await new Promise(r => setTimeout(r, 13000)); // 13s gap → safely under 5/min
       await Promise.allSettled([fetchMacroData()]);
     }
 
