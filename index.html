@@ -524,13 +524,31 @@
   <!-- Disclaimer -->
   <p class="disclaimer">
     This is not financial advice. For informational purposes only.<br>
-    Data sources: CoinGecko, Alternative.me, Alpha Vantage, FRED (St. Louis Fed). Prices may be delayed.
+    Data sources: CoinGecko, Alternative.me, Alpha Vantage, CoinMetrics. Prices may be delayed.
   </p>
 
   <script>
-    const AV_KEY   = '29GWL7D4NU80CS36';
-    // Free FRED key: research.stlouisfed.org/useraccount/apikeys
-    const FRED_KEY = 'c1da1c46dbaed474ea65680c675e0a56';
+    const AV_KEY = '29GWL7D4NU80CS36';
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    function saveCache(key, val) {
+      try { localStorage.setItem('cache_' + key, JSON.stringify({ t: Date.now(), v: val })); } catch (_) {}
+    }
+
+    function loadCache(key, maxAgeMs) {
+      try {
+        const raw = localStorage.getItem('cache_' + key);
+        if (!raw) return null;
+        const { t, v } = JSON.parse(raw);
+        return Date.now() - t > maxAgeMs ? null : v;
+      } catch (_) { return null; }
+    }
+
+    function showIndicatorError(tagId, msg) {
+      const el = document.getElementById(tagId);
+      if (el) { el.textContent = msg; el.style.color = '#475569'; }
+    }
 
     // ── Filter buttons ───────────────────────────────────────────────
     const filtersEl = document.querySelector('.filters');
@@ -823,68 +841,99 @@
       applyPuell(issVals[issVals.length - 1] / ma365);
     }
 
-    // S&P RSI: AV compact (100 days, free) — enough for RSI-14.
-    // S&P 200MA: AV weekly (1382 weeks, free) — 40-week MA = 200-day MA equivalent.
-    async function fetchSPHistory() {
-      // Daily closes for RSI-14
-      const dailyRes = await fetch(
-        `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&outputsize=compact&apikey=${AV_KEY}`,
-        { cache: 'no-store' }
-      );
-      const dailyData = await dailyRes.json();
-      const dailyTS   = dailyData['Time Series (Daily)'];
-      if (!dailyTS) throw new Error('AV SPY daily: ' + (dailyData.Note || dailyData.Information || 'bad response'));
-      const dailyPrices = Object.values(dailyTS).reverse().map(d => parseFloat(d['4. close']));
-      applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', calcRSI(dailyPrices));
-
-      // Weekly closes for 40-week MA (≡ 200-day MA)
-      const weeklyRes = await fetch(
-        `https://www.alphavantage.co/query?function=TIME_SERIES_WEEKLY&symbol=SPY&apikey=${AV_KEY}`,
-        { cache: 'no-store' }
-      );
-      const weeklyData = await weeklyRes.json();
-      const weeklyTS   = weeklyData['Weekly Time Series'];
-      if (!weeklyTS) throw new Error('AV SPY weekly: ' + (weeklyData.Note || weeklyData.Information || 'bad response'));
-      const weeklyPrices = Object.values(weeklyTS).slice(0, 250).reverse().map(d => parseFloat(d['4. close']));
-      // calc200MADist works on any timeframe — here 200 units = 200 weeks, so we use 40 explicitly
-      const ma40  = weeklyPrices.slice(-40).reduce((s, p) => s + p, 0) / 40;
-      const dist  = ((weeklyPrices[weeklyPrices.length - 1] - ma40) / ma40) * 100;
-      applyMADist('spMaVal', 'spMaTag', 'spMaBar', dist);
+    // S&P RSI — AV compact daily (100 bars, free tier, enough for RSI-14)
+    async function fetchSPRsi() {
+      const CACHE_KEY = 'sp_rsi', MAX_AGE = 8 * 3600000;
+      try {
+        const res  = await fetch(
+          `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&outputsize=compact&apikey=${AV_KEY}`,
+          { cache: 'no-store' }
+        );
+        const data = await res.json();
+        const ts   = data['Time Series (Daily)'];
+        if (!ts) throw new Error(data.Note || data.Information || 'no Time Series');
+        const prices = Object.values(ts).reverse().map(d => parseFloat(d['4. close']));
+        const rsi    = calcRSI(prices);
+        if (rsi === null) throw new Error('not enough data');
+        applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', rsi);
+        saveCache(CACHE_KEY, rsi);
+      } catch (e) {
+        const cached = loadCache(CACHE_KEY, MAX_AGE);
+        if (cached !== null) {
+          applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', cached);
+          document.getElementById('spRsiTag').textContent += ' (cached)';
+        } else {
+          showIndicatorError('spRsiTag', 'Rate limited — retry later');
+        }
+      }
     }
 
-    // Macro Score from FRED (St. Louis Fed) — free key at research.stlouisfed.org/useraccount/apikeys
-    // Uses FEDFUNDS (monthly Fed Funds rate) and CPIAUCSL (monthly CPI).
-    async function fetchMacroData() {
-      if (FRED_KEY === 'YOUR_FRED_KEY') {
-        document.getElementById('macroTag').textContent = 'Add FRED key to enable';
-        document.getElementById('macroTag').style.color = '#475569';
-        return;
+    // S&P 200MA — AV weekly (40-week MA = 200-day MA equivalent, free tier)
+    async function fetchSPMa() {
+      const CACHE_KEY = 'sp_ma', MAX_AGE = 8 * 3600000;
+      try {
+        const res  = await fetch(
+          `https://www.alphavantage.co/query?function=TIME_SERIES_WEEKLY&symbol=SPY&apikey=${AV_KEY}`,
+          { cache: 'no-store' }
+        );
+        const data = await res.json();
+        const ts   = data['Weekly Time Series'];
+        if (!ts) throw new Error(data.Note || data.Information || 'no Weekly Time Series');
+        const prices = Object.values(ts).slice(0, 250).reverse().map(d => parseFloat(d['4. close']));
+        const ma40   = prices.slice(-40).reduce((s, p) => s + p, 0) / 40;
+        const dist   = ((prices[prices.length - 1] - ma40) / ma40) * 100;
+        applyMADist('spMaVal', 'spMaTag', 'spMaBar', dist);
+        saveCache(CACHE_KEY, dist);
+      } catch (e) {
+        const cached = loadCache(CACHE_KEY, MAX_AGE);
+        if (cached !== null) {
+          applyMADist('spMaVal', 'spMaTag', 'spMaBar', cached);
+          document.getElementById('spMaTag').textContent += ' (cached)';
+        } else {
+          showIndicatorError('spMaTag', 'Rate limited — retry later');
+        }
       }
-      const base = 'https://api.stlouisfed.org/fred/series/observations';
+    }
 
-      const rateRes = await fetch(
-        `${base}?series_id=FEDFUNDS&sort_order=desc&limit=2&file_type=json&api_key=${FRED_KEY}`,
-        { cache: 'no-store' }
-      );
-      const rateData = await rateRes.json();
-      if (!rateData.observations) throw new Error('FRED FEDFUNDS: bad response');
-      const fedRate = parseFloat(rateData.observations[0].value);
+    // Macro Score — AV economic indicators (FEDERAL_FUNDS_RATE + CPI), free, no CORS issues
+    async function fetchMacroData() {
+      const CACHE_KEY = 'macro', MAX_AGE = 12 * 3600000;
+      try {
+        const rateRes  = await fetch(
+          `https://www.alphavantage.co/query?function=FEDERAL_FUNDS_RATE&interval=monthly&apikey=${AV_KEY}`,
+          { cache: 'no-store' }
+        );
+        const rateData = await rateRes.json();
+        if (!rateData.data) throw new Error(rateData.Note || rateData.Information || 'no FEDERAL_FUNDS_RATE data');
+        const fedRate = parseFloat(rateData.data[0].value);
 
-      const cpiRes = await fetch(
-        `${base}?series_id=CPIAUCSL&sort_order=desc&limit=14&file_type=json&api_key=${FRED_KEY}`,
-        { cache: 'no-store' }
-      );
-      const cpiData = await cpiRes.json();
-      if (!cpiData.observations) throw new Error('FRED CPIAUCSL: bad response');
-      const cpiNow  = parseFloat(cpiData.observations[0].value);
-      const cpiPrev = parseFloat(cpiData.observations[12].value);
-      const inflation = (cpiNow - cpiPrev) / cpiPrev * 100;
+        await sleep(2000);
 
-      const score = Math.min(100, Math.round(
-        Math.max(0, 50 - fedRate * 10) +
-        Math.max(0, 50 - Math.max(0, inflation - 2) * 10)
-      ));
-      applyMacro(score, fedRate, inflation);
+        const cpiRes  = await fetch(
+          `https://www.alphavantage.co/query?function=CPI&interval=monthly&apikey=${AV_KEY}`,
+          { cache: 'no-store' }
+        );
+        const cpiData = await cpiRes.json();
+        if (!cpiData.data) throw new Error(cpiData.Note || cpiData.Information || 'no CPI data');
+        const cpiNow   = parseFloat(cpiData.data[0].value);
+        const cpiPrev  = parseFloat(cpiData.data[12].value);
+        const inflation = (cpiNow - cpiPrev) / cpiPrev * 100;
+
+        const score = Math.min(100, Math.round(
+          Math.max(0, 50 - fedRate * 10) +
+          Math.max(0, 50 - Math.max(0, inflation - 2) * 10)
+        ));
+        applyMacro(score, fedRate, inflation);
+        saveCache(CACHE_KEY, { score, fedRate, inflation });
+      } catch (e) {
+        const cached = loadCache(CACHE_KEY, MAX_AGE);
+        if (cached !== null) {
+          applyMacro(cached.score, cached.fedRate, cached.inflation);
+          document.getElementById('macroTag').textContent += ' (cached)';
+        } else {
+          showIndicatorError('macroTag', 'Rate limited — retry later');
+        }
+      }
     }
 
     // ── Timestamp ────────────────────────────────────────────────────
@@ -900,16 +949,17 @@
       stampTime();
     }
 
-    // History fetches run once on load — RSI/MA are daily indicators.
-    // AV budget: 16 SPY-price calls/day (every 90 min) + 3 history/macro = 19/day.
+    // AV free tier: 25 calls/day, 5 calls/min.
+    // fetchSP fires at T=0 (1 AV call). Stagger the remaining 4 AV calls 15s apart
+    // so they never bunch up: T≈15s RSI, T≈30s MA, T≈45s macro rate, T≈47s macro CPI.
     async function refreshHistory() {
-      // CoinGecko + CoinMetrics: parallel, no key, no strict rate limit
       await Promise.allSettled([fetchBtcHistory(), fetchGoldHistory(), fetchOnChain()]);
-      // AV: fetchSPHistory makes 2 calls (daily + weekly) — run alone, then wait
-      // before fetchMacroData to avoid hitting the 5-calls/min AV rate limit.
-      await Promise.allSettled([fetchSPHistory()]);
-      await new Promise(r => setTimeout(r, 13000)); // 13s gap → safely under 5/min
-      await Promise.allSettled([fetchMacroData()]);
+      await sleep(15000);
+      await fetchSPRsi();
+      await sleep(15000);
+      await fetchSPMa();
+      await sleep(15000);
+      await fetchMacroData();
     }
 
     refresh();
