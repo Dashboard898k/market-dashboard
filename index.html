@@ -465,18 +465,18 @@
 
     <div class="indicator-row">
       <div class="indicator-header">
-        <span class="indicator-name">MVRV Z-Score</span>
-        <span class="indicator-value">— <span class="indicator-tag" style="color:#334155">Paid API (Glassnode)</span></span>
+        <span class="indicator-name">MVRV Ratio</span>
+        <span class="indicator-value"><span id="mvrvVal">—</span> <span class="indicator-tag" id="mvrvTag">Loading…</span></span>
       </div>
-      <div class="progress-track"><div class="progress-fill" style="width:0%;background:#1e1e1e"></div></div>
+      <div class="progress-track"><div class="progress-fill fill-blue" id="mvrvBar" style="width:0%"></div></div>
     </div>
 
     <div class="indicator-row">
       <div class="indicator-header">
-        <span class="indicator-name">NUPL</span>
-        <span class="indicator-value">— <span class="indicator-tag" style="color:#334155">Paid API (Glassnode)</span></span>
+        <span class="indicator-name">Puell Multiple</span>
+        <span class="indicator-value"><span id="puellVal">—</span> <span class="indicator-tag" id="puellTag">Loading…</span></span>
       </div>
-      <div class="progress-track"><div class="progress-fill" style="width:0%;background:#1e1e1e"></div></div>
+      <div class="progress-track"><div class="progress-fill fill-blue" id="puellBar" style="width:0%"></div></div>
     </div>
 
     <div class="indicator-row">
@@ -742,6 +742,44 @@
       applySP(parseFloat(q['05. price']), parseFloat(q['10. change percent'].replace('%', '')));
     }
 
+    // ── On-chain DOM helpers ─────────────────────────────────────────
+    // MVRV Ratio: <1 = undervalued, >3 = overvalued, cycle top ~3.5+
+    function applyMVRV(value) {
+      const zones = [
+        { max: 0.9, label: 'Extreme Low',  cls: 'fill-blue',   color: '#60a5fa' },
+        { max: 1.5, label: 'Undervalued',  cls: 'fill-green',  color: '#4ade80' },
+        { max: 2.5, label: 'Fair Value',   cls: 'fill-yellow', color: '#facc15' },
+        { max: 3.5, label: 'Overvalued',   cls: 'fill-orange', color: '#fb923c' },
+        { max: 999, label: 'Extreme High', cls: 'fill-red',    color: '#f87171' },
+      ];
+      const z = zoneFor(value, zones);
+      document.getElementById('mvrvVal').textContent = value.toFixed(2);
+      const tag = document.getElementById('mvrvTag');
+      tag.textContent = z.label; tag.style.color = z.color;
+      const bar = document.getElementById('mvrvBar');
+      bar.className  = `progress-fill ${z.cls}`;
+      bar.style.width = Math.min(100, (value / 4.0) * 100).toFixed(1) + '%';
+    }
+
+    // Puell Multiple: daily miner revenue ÷ 365-day MA of miner revenue
+    // <0.5 = miner capitulation (bottom), >4 = cycle top
+    function applyPuell(value) {
+      const zones = [
+        { max: 0.5, label: 'Capitulation', cls: 'fill-blue',   color: '#60a5fa' },
+        { max: 1.0, label: 'Buy Zone',     cls: 'fill-green',  color: '#4ade80' },
+        { max: 2.0, label: 'Fair Value',   cls: 'fill-yellow', color: '#facc15' },
+        { max: 4.0, label: 'Overvalued',   cls: 'fill-orange', color: '#fb923c' },
+        { max: 999, label: 'Cycle Top',    cls: 'fill-red',    color: '#f87171' },
+      ];
+      const z = zoneFor(value, zones);
+      document.getElementById('puellVal').textContent = value.toFixed(2);
+      const tag = document.getElementById('puellTag');
+      tag.textContent = z.label; tag.style.color = z.color;
+      const bar = document.getElementById('puellBar');
+      bar.className  = `progress-fill ${z.cls}`;
+      bar.style.width = Math.min(100, (value / 5.0) * 100).toFixed(1) + '%';
+    }
+
     // ── Fetch: history (once on page load — daily indicators) ────────
     async function fetchBtcHistory() {
       const res  = await fetch(
@@ -761,6 +799,26 @@
       const prices = (await res.json()).prices.map(p => p[1]);
       applyRSI   ('goldRsiVal', 'goldRsiTag', 'goldRsiBar', calcRSI(prices));
       applyMADist('goldMaVal',  'goldMaTag',  'goldMaBar',  calc200MADist(prices));
+    }
+
+    // MVRV + Puell Multiple from CoinMetrics community API (free, no key)
+    async function fetchOnChain() {
+      // MVRV Ratio — single latest value
+      const mvrvRes  = await fetch(
+        'https://community-api.coinmetrics.io/v4/timeseries/asset-metrics?assets=btc&metrics=CapMVRVCur&limit_per_asset=1&page_size=1',
+        { cache: 'no-store' }
+      );
+      const mvrv = parseFloat((await mvrvRes.json()).data[0].CapMVRVCur);
+      applyMVRV(mvrv);
+
+      // Puell Multiple — 400 days of daily issuance USD, then compute MA365
+      const puellRes = await fetch(
+        'https://community-api.coinmetrics.io/v4/timeseries/asset-metrics?assets=btc&metrics=IssTotUSD&limit_per_asset=400&page_size=400',
+        { cache: 'no-store' }
+      );
+      const issVals = (await puellRes.json()).data.map(d => parseFloat(d.IssTotUSD));
+      const ma365   = issVals.slice(-365).reduce((s, v) => s + v, 0) / 365;
+      applyPuell(issVals[issVals.length - 1] / ma365);
     }
 
     // SPY daily history — 1 AV call, derives RSI + 200MA for S&P
@@ -819,7 +877,8 @@
     // History fetches run once on load — RSI/MA are daily indicators.
     // AV budget: 16 SPY-price calls/day (every 90 min) + 3 history/macro = 19/day.
     async function refreshHistory() {
-      await Promise.allSettled([fetchBtcHistory(), fetchGoldHistory()]);
+      // CoinGecko + CoinMetrics in parallel (no key, no strict rate limit)
+      await Promise.allSettled([fetchBtcHistory(), fetchGoldHistory(), fetchOnChain()]);
       // AV calls sequential to respect 5-calls/min rate limit
       await Promise.allSettled([fetchSPHistory()]);
       await Promise.allSettled([fetchMacroData()]);
