@@ -387,8 +387,8 @@
         <span class="card-label">S&amp;P 500</span>
         <span class="card-tag tag-sp">Index</span>
       </div>
-      <div class="card-price">—</div>
-      <div class="card-change change-up">—</div>
+      <div class="card-price" id="spPrice">—</div>
+      <div class="card-change" id="spChange">—</div>
       <div class="card-name">S&amp;P 500 Index</div>
     </div>
 
@@ -397,8 +397,8 @@
         <span class="card-label">XAU</span>
         <span class="card-tag tag-gold">Gold</span>
       </div>
-      <div class="card-price">—</div>
-      <div class="card-change change-down">—</div>
+      <div class="card-price" id="goldPrice">—</div>
+      <div class="card-change" id="goldChange">—</div>
       <div class="card-name">Gold (oz)</div>
     </div>
   </div>
@@ -504,7 +504,7 @@
   <!-- Disclaimer -->
   <p class="disclaimer">
     This is not financial advice. For informational purposes only.<br>
-    Data sources: CoinGecko, Alternative.me. Prices may be delayed.
+    Data sources: CoinGecko, Alternative.me, Yahoo Finance. Prices may be delayed.
   </p>
 
   <script>
@@ -519,121 +519,103 @@
     });
 
     // ── Signal logic ────────────────────────────────────────────────
-    // phase: 'bull' | 'bear' | 'neutral'
-    // confluence: 0–100 (how strong/confident the signal is)
-    // Returns suggested position sizing (% of portfolio) tightened by confluence.
     function computeSignal(phase, confluence) {
-      // Map confluence 0–100 → suggested allocation 2–20%
       const pct = Math.round(2 + (confluence / 100) * 18);
-
-      if (phase === 'bull') {
-        return {
-          type: 'tp',
-          title: 'Take Profit Zone',
-          detail: `Sentiment is bullish. Consider trimming exposure as the market reaches extended levels.`,
-          pct: `Suggested: take ${pct}% off the table`,
-        };
-      }
-      if (phase === 'bear') {
-        return {
-          type: 'dca',
-          title: 'DCA Opportunity',
-          detail: `Sentiment is bearish. Market may be oversold — consider a scaled entry.`,
-          pct: `Suggested: deploy ${pct}% of cash`,
-        };
-      }
+      if (phase === 'bull') return {
+        type: 'tp',
+        title: 'Take Profit Zone',
+        detail: 'Sentiment is bullish. Consider trimming exposure as the market reaches extended levels.',
+        pct: `Suggested: take ${pct}% off the table`,
+      };
+      if (phase === 'bear') return {
+        type: 'dca',
+        title: 'DCA Opportunity',
+        detail: 'Sentiment is bearish. Market may be oversold — consider a scaled entry.',
+        pct: `Suggested: deploy ${pct}% of cash`,
+      };
       return {
         type: 'wait',
         title: 'Wait for Confluence',
-        detail: `Sentiment is neutral. No strong signal — wait for clearer market direction.`,
-        pct: `Hold — no action suggested`,
+        detail: 'Sentiment is neutral. No strong signal — wait for clearer market direction.',
+        pct: 'Hold — no action suggested',
       };
     }
 
     function applySignal(phase, confluence) {
       const signal = computeSignal(phase, confluence);
-      const block = document.getElementById('signalBlock');
-      const title = document.getElementById('signalTitle');
-      const detail = document.getElementById('signalDetail');
-      const pctEl = document.getElementById('signalPct');
-
-      block.className = `signal-block signal-${signal.type}`;
-      title.textContent = signal.title;
-      detail.textContent = signal.detail;
-      pctEl.textContent = signal.pct;
+      document.getElementById('signalBlock').className = `signal-block signal-${signal.type}`;
+      document.getElementById('signalTitle').textContent  = signal.title;
+      document.getElementById('signalDetail').textContent = signal.detail;
+      document.getElementById('signalPct').textContent    = signal.pct;
     }
 
-    // ── Derive phase + confluence from F&G ─────────────────────────
-    // This uses Fear & Greed as the sole live signal until more
-    // indicators are wired up. Phase thresholds: bear <40, bull >60.
+    // ── Derive phase + confluence from F&G ──────────────────────────
     function derivePhaseAndConfluence(fng) {
-      let phase;
-      if (fng <= 40)      phase = 'bear';
-      else if (fng >= 60) phase = 'bull';
-      else                phase = 'neutral';
-
-      // Confluence = distance from neutral (50), scaled to 0–100
+      const phase = fng <= 40 ? 'bear' : fng >= 60 ? 'bull' : 'neutral';
       const confluence = Math.min(100, Math.round(Math.abs(fng - 50) * 2));
       return { phase, confluence };
     }
 
-    // ── Update DOM with F&G data ────────────────────────────────────
+    // ── DOM helpers ─────────────────────────────────────────────────
     function applyFng(value, classification) {
-      const fngValueEl = document.getElementById('fngValue');
       const fngLabelEl = document.getElementById('fngLabel');
       const fngBarEl   = document.getElementById('fngBar');
 
-      fngValueEl.childNodes[0].textContent = value + ' ';
+      document.getElementById('fngValue').childNodes[0].textContent = value + ' ';
       fngLabelEl.textContent = classification;
-
-      // Colour the label by zone
       fngLabelEl.className = 'indicator-tag';
-      if (value <= 25)      fngLabelEl.classList.add('change-down');
+      if      (value <= 25) fngLabelEl.classList.add('change-down');
       else if (value <= 45) fngLabelEl.style.color = '#fb923c';
       else if (value <= 55) fngLabelEl.style.color = '#facc15';
-      else if (value <= 75) fngLabelEl.style.color = '#86efac';
       else                  fngLabelEl.classList.add('change-up');
 
       fngBarEl.style.width = value + '%';
-      // Colour the bar by zone
       fngBarEl.className = 'progress-fill';
-      if (value <= 25)      fngBarEl.classList.add('fill-red');
+      if      (value <= 25) fngBarEl.classList.add('fill-red');
       else if (value <= 45) fngBarEl.classList.add('fill-orange');
       else if (value <= 55) fngBarEl.classList.add('fill-yellow');
-      else if (value <= 75) fngBarEl.classList.add('fill-green');
       else                  fngBarEl.classList.add('fill-green');
 
-      // Confluence & cycle
       const { phase, confluence } = derivePhaseAndConfluence(value);
-
       document.getElementById('confluenceScore').textContent = confluence + '%';
+      document.getElementById('heatmapMarker').style.left    = value + '%';
 
       const badge = document.getElementById('phaseBadge');
       badge.className = 'phase-badge';
-      if (phase === 'bull')    { badge.classList.add('phase-bull');    badge.textContent = 'Bull'; }
-      else if (phase === 'bear') { badge.classList.add('phase-bear'); badge.textContent = 'Bear'; }
-      else                     { badge.classList.add('phase-neutral'); badge.textContent = 'Neutral'; }
-
-      // Heatmap marker: F&G 0 → left 0%, F&G 100 → left 100%
-      document.getElementById('heatmapMarker').style.left = value + '%';
+      const phaseMap = { bull: ['phase-bull', 'Bull'], bear: ['phase-bear', 'Bear'], neutral: ['phase-neutral', 'Neutral'] };
+      badge.classList.add(phaseMap[phase][0]);
+      badge.textContent = phaseMap[phase][1];
 
       applySignal(phase, confluence);
     }
 
-    // ── Update DOM with BTC data ─────────────────────────────────────
-    function applyBtc(price, change24h) {
+    function applyBtc(price, change) {
       document.getElementById('btcPrice').textContent =
         '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 });
-
-      const changeEl = document.getElementById('btcChange');
-      const sign = change24h >= 0 ? '+' : '';
-      changeEl.textContent = sign + change24h.toFixed(2) + '%';
-      changeEl.className = 'card-change ' + (change24h >= 0 ? 'change-up' : 'change-down');
+      const el = document.getElementById('btcChange');
+      el.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+      el.className = 'card-change ' + (change >= 0 ? 'change-up' : 'change-down');
     }
 
-    // ── Fetch functions ─────────────────────────────────────────────
+    function applySP(price, change) {
+      document.getElementById('spPrice').textContent =
+        price.toLocaleString('en-US', { maximumFractionDigits: 2 });
+      const el = document.getElementById('spChange');
+      el.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+      el.className = 'card-change ' + (change >= 0 ? 'change-up' : 'change-down');
+    }
+
+    function applyGold(price, change) {
+      document.getElementById('goldPrice').textContent =
+        '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 });
+      const el = document.getElementById('goldChange');
+      el.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+      el.className = 'card-change ' + (change >= 0 ? 'change-up' : 'change-down');
+    }
+
+    // ── Fetch helpers ───────────────────────────────────────────────
     async function fetchBtc() {
-      const res = await fetch(
+      const res  = await fetch(
         'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true',
         { cache: 'no-store' }
       );
@@ -642,10 +624,35 @@
     }
 
     async function fetchFng() {
-      const res = await fetch('https://api.alternative.me/fng/', { cache: 'no-store' });
+      const res  = await fetch('https://api.alternative.me/fng/', { cache: 'no-store' });
       const data = await res.json();
       const entry = data.data[0];
       applyFng(parseInt(entry.value, 10), entry.value_classification);
+    }
+
+    // Shared Yahoo Finance chart fetch — returns { price, change }
+    // Uses the v8 chart endpoint (no API key required).
+    async function fetchYahooChart(symbol) {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+      const res  = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Yahoo Finance ${symbol}: HTTP ${res.status}`);
+      const data = await res.json();
+      const meta = data.chart.result[0].meta;
+      const price = meta.regularMarketPrice;
+      const prev  = meta.previousClose ?? meta.chartPreviousClose;
+      const change = prev ? ((price - prev) / prev) * 100 : 0;
+      return { price, change };
+    }
+
+    async function fetchSP() {
+      const { price, change } = await fetchYahooChart('^GSPC');
+      applySP(price, change);
+    }
+
+    // GC=F = Gold Futures (COMEX), priced in USD per troy oz
+    async function fetchGold() {
+      const { price, change } = await fetchYahooChart('GC=F');
+      applyGold(price, change);
     }
 
     // ── Timestamp ───────────────────────────────────────────────────
@@ -655,15 +662,15 @@
         'Updated ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
-    // ── Main refresh ────────────────────────────────────────────────
+    // ── Main refresh — all fetches run in parallel ───────────────────
+    // allSettled means one failing API never blocks the others.
     async function refresh() {
-      try { await Promise.all([fetchBtc(), fetchFng()]); }
-      catch (e) { console.warn('Fetch error:', e); }
+      await Promise.allSettled([fetchBtc(), fetchFng(), fetchSP(), fetchGold()]);
       stampTime();
     }
 
     refresh();
-    setInterval(refresh, 5 * 60 * 1000); // every 5 minutes
+    setInterval(refresh, 5 * 60 * 1000);
   </script>
 
 </body>
