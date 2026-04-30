@@ -444,59 +444,79 @@
         <span class="indicator-name">Fear &amp; Greed</span>
         <span class="indicator-value" id="fngValue">— <span class="indicator-tag" id="fngLabel">—</span></span>
       </div>
-      <div class="progress-track">
-        <div class="progress-fill fill-yellow" id="fngBar" style="width: 0%;"></div>
-      </div>
+      <div class="progress-track"><div class="progress-fill fill-yellow" id="fngBar" style="width:0%"></div></div>
     </div>
 
     <div class="indicator-row">
       <div class="indicator-header">
-        <span class="indicator-name">BTC RSI</span>
-        <span class="indicator-value">— <span class="indicator-tag change-down">Placeholder</span></span>
+        <span class="indicator-name">BTC RSI (14D)</span>
+        <span class="indicator-value"><span id="btcRsiVal">—</span> <span class="indicator-tag" id="btcRsiTag">Loading…</span></span>
       </div>
-      <div class="progress-track">
-        <div class="progress-fill fill-purple" style="width: 50%;"></div>
-      </div>
+      <div class="progress-track"><div class="progress-fill fill-purple" id="btcRsiBar" style="width:0%"></div></div>
     </div>
 
     <div class="indicator-row">
       <div class="indicator-header">
-        <span class="indicator-name">MVRV</span>
-        <span class="indicator-value">— <span class="indicator-tag change-down">Placeholder</span></span>
+        <span class="indicator-name">BTC 200MA Distance</span>
+        <span class="indicator-value"><span id="btcMaVal">—</span> <span class="indicator-tag" id="btcMaTag">Loading…</span></span>
       </div>
-      <div class="progress-track">
-        <div class="progress-fill fill-blue" style="width: 50%;"></div>
-      </div>
+      <div class="progress-track"><div class="progress-fill fill-purple" id="btcMaBar" style="width:50%"></div></div>
     </div>
 
     <div class="indicator-row">
       <div class="indicator-header">
-        <span class="indicator-name">S&amp;P RSI</span>
-        <span class="indicator-value">— <span class="indicator-tag change-down">Placeholder</span></span>
+        <span class="indicator-name">MVRV Z-Score</span>
+        <span class="indicator-value">— <span class="indicator-tag" style="color:#334155">Paid API (Glassnode)</span></span>
       </div>
-      <div class="progress-track">
-        <div class="progress-fill fill-green" style="width: 50%;"></div>
-      </div>
+      <div class="progress-track"><div class="progress-fill" style="width:0%;background:#1e1e1e"></div></div>
     </div>
 
     <div class="indicator-row">
       <div class="indicator-header">
-        <span class="indicator-name">Gold RSI</span>
-        <span class="indicator-value">— <span class="indicator-tag change-down">Placeholder</span></span>
+        <span class="indicator-name">NUPL</span>
+        <span class="indicator-value">— <span class="indicator-tag" style="color:#334155">Paid API (Glassnode)</span></span>
       </div>
-      <div class="progress-track">
-        <div class="progress-fill fill-orange" style="width: 50%;"></div>
+      <div class="progress-track"><div class="progress-fill" style="width:0%;background:#1e1e1e"></div></div>
+    </div>
+
+    <div class="indicator-row">
+      <div class="indicator-header">
+        <span class="indicator-name">S&amp;P RSI (14D)</span>
+        <span class="indicator-value"><span id="spRsiVal">—</span> <span class="indicator-tag" id="spRsiTag">Loading…</span></span>
       </div>
+      <div class="progress-track"><div class="progress-fill fill-green" id="spRsiBar" style="width:0%"></div></div>
+    </div>
+
+    <div class="indicator-row">
+      <div class="indicator-header">
+        <span class="indicator-name">S&amp;P 200MA Distance</span>
+        <span class="indicator-value"><span id="spMaVal">—</span> <span class="indicator-tag" id="spMaTag">Loading…</span></span>
+      </div>
+      <div class="progress-track"><div class="progress-fill fill-green" id="spMaBar" style="width:50%"></div></div>
+    </div>
+
+    <div class="indicator-row">
+      <div class="indicator-header">
+        <span class="indicator-name">Gold RSI (14D)</span>
+        <span class="indicator-value"><span id="goldRsiVal">—</span> <span class="indicator-tag" id="goldRsiTag">Loading…</span></span>
+      </div>
+      <div class="progress-track"><div class="progress-fill fill-orange" id="goldRsiBar" style="width:0%"></div></div>
+    </div>
+
+    <div class="indicator-row">
+      <div class="indicator-header">
+        <span class="indicator-name">Gold 200MA Distance</span>
+        <span class="indicator-value"><span id="goldMaVal">—</span> <span class="indicator-tag" id="goldMaTag">Loading…</span></span>
+      </div>
+      <div class="progress-track"><div class="progress-fill fill-orange" id="goldMaBar" style="width:50%"></div></div>
     </div>
 
     <div class="indicator-row">
       <div class="indicator-header">
         <span class="indicator-name">Macro Score</span>
-        <span class="indicator-value">— <span class="indicator-tag change-down">Placeholder</span></span>
+        <span class="indicator-value"><span id="macroVal">—</span> <span class="indicator-tag" id="macroTag">Loading…</span></span>
       </div>
-      <div class="progress-track">
-        <div class="progress-fill fill-yellow" style="width: 50%;"></div>
-      </div>
+      <div class="progress-track"><div class="progress-fill fill-yellow" id="macroBar" style="width:0%"></div></div>
     </div>
 
   </div>
@@ -504,11 +524,13 @@
   <!-- Disclaimer -->
   <p class="disclaimer">
     This is not financial advice. For informational purposes only.<br>
-    Data sources: CoinGecko, Alternative.me, Yahoo Finance. Prices may be delayed.
+    Data sources: CoinGecko, Alternative.me, Alpha Vantage. Prices may be delayed.
   </p>
 
   <script>
-    // ── Filter buttons ──────────────────────────────────────────────
+    const AV_KEY = '29GWL7D4NU80CS36';
+
+    // ── Filter buttons ───────────────────────────────────────────────
     const filtersEl = document.querySelector('.filters');
     document.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -518,106 +540,179 @@
       });
     });
 
-    // ── Signal logic ────────────────────────────────────────────────
+    // ── Maths ────────────────────────────────────────────────────────
+    // RSI-14 using Wilder's smoothing. Expects chronologically ordered prices.
+    function calcRSI(prices, period = 14) {
+      if (prices.length < period + 1) return null;
+      let gain = 0, loss = 0;
+      for (let i = 1; i <= period; i++) {
+        const d = prices[i] - prices[i - 1];
+        if (d > 0) gain += d; else loss -= d;
+      }
+      let avgGain = gain / period, avgLoss = loss / period;
+      for (let i = period + 1; i < prices.length; i++) {
+        const d = prices[i] - prices[i - 1];
+        avgGain = (avgGain * (period - 1) + Math.max(0,  d)) / period;
+        avgLoss = (avgLoss * (period - 1) + Math.max(0, -d)) / period;
+      }
+      if (avgLoss === 0) return 100;
+      return 100 - 100 / (1 + avgGain / avgLoss);
+    }
+
+    // Returns % distance of last price above/below its 200-day MA.
+    function calc200MADist(prices) {
+      if (prices.length < 200) return null;
+      const ma = prices.slice(-200).reduce((s, p) => s + p, 0) / 200;
+      return ((prices[prices.length - 1] - ma) / ma) * 100;
+    }
+
+    // ── Signal logic ─────────────────────────────────────────────────
     function computeSignal(phase, confluence) {
       const pct = Math.round(2 + (confluence / 100) * 18);
       if (phase === 'bull') return {
-        type: 'tp',
-        title: 'Take Profit Zone',
+        type: 'tp',  title: 'Take Profit Zone',
         detail: 'Sentiment is bullish. Consider trimming exposure as the market reaches extended levels.',
         pct: `Suggested: take ${pct}% off the table`,
       };
       if (phase === 'bear') return {
-        type: 'dca',
-        title: 'DCA Opportunity',
+        type: 'dca', title: 'DCA Opportunity',
         detail: 'Sentiment is bearish. Market may be oversold — consider a scaled entry.',
         pct: `Suggested: deploy ${pct}% of cash`,
       };
       return {
-        type: 'wait',
-        title: 'Wait for Confluence',
+        type: 'wait', title: 'Wait for Confluence',
         detail: 'Sentiment is neutral. No strong signal — wait for clearer market direction.',
         pct: 'Hold — no action suggested',
       };
     }
 
     function applySignal(phase, confluence) {
-      const signal = computeSignal(phase, confluence);
-      document.getElementById('signalBlock').className = `signal-block signal-${signal.type}`;
-      document.getElementById('signalTitle').textContent  = signal.title;
-      document.getElementById('signalDetail').textContent = signal.detail;
-      document.getElementById('signalPct').textContent    = signal.pct;
+      const s = computeSignal(phase, confluence);
+      document.getElementById('signalBlock').className  = `signal-block signal-${s.type}`;
+      document.getElementById('signalTitle').textContent  = s.title;
+      document.getElementById('signalDetail').textContent = s.detail;
+      document.getElementById('signalPct').textContent    = s.pct;
     }
 
-    // ── Derive phase + confluence from F&G ──────────────────────────
     function derivePhaseAndConfluence(fng) {
       const phase = fng <= 40 ? 'bear' : fng >= 60 ? 'bull' : 'neutral';
-      const confluence = Math.min(100, Math.round(Math.abs(fng - 50) * 2));
-      return { phase, confluence };
+      return { phase, confluence: Math.min(100, Math.round(Math.abs(fng - 50) * 2)) };
     }
 
-    // ── DOM helpers ─────────────────────────────────────────────────
+    // ── Indicator DOM helpers ────────────────────────────────────────
+    const RSI_ZONES = [
+      { max: 30, label: 'Oversold',   cls: 'fill-red',    color: '#f87171' },
+      { max: 45, label: 'Bearish',    cls: 'fill-orange',  color: '#fb923c' },
+      { max: 55, label: 'Neutral',    cls: 'fill-yellow',  color: '#facc15' },
+      { max: 70, label: 'Bullish',    cls: 'fill-green',   color: '#4ade80' },
+      { max: 101,label: 'Overbought', cls: 'fill-purple',  color: '#a78bfa' },
+    ];
+
+    const MA_ZONES = [
+      { max: -20, label: 'Far Below MA', cls: 'fill-red',    color: '#f87171' },
+      { max:   0, label: 'Below MA',     cls: 'fill-orange',  color: '#fb923c' },
+      { max:  10, label: 'Near MA',      cls: 'fill-yellow',  color: '#facc15' },
+      { max:  50, label: 'Above MA',     cls: 'fill-green',   color: '#4ade80' },
+      { max: 999, label: 'Extended',     cls: 'fill-purple',  color: '#a78bfa' },
+    ];
+
+    function zoneFor(value, zones) {
+      return zones.find(z => value < z.max) ?? zones[zones.length - 1];
+    }
+
+    function applyRSI(valId, tagId, barId, rsi) {
+      if (rsi === null) return;
+      const z = zoneFor(rsi, RSI_ZONES);
+      document.getElementById(valId).textContent   = Math.round(rsi);
+      const tag = document.getElementById(tagId);
+      tag.textContent  = z.label;
+      tag.style.color  = z.color;
+      const bar = document.getElementById(barId);
+      bar.className    = `progress-fill ${z.cls}`;
+      bar.style.width  = rsi.toFixed(1) + '%';
+    }
+
+    function applyMADist(valId, tagId, barId, dist) {
+      if (dist === null) return;
+      const z = zoneFor(dist, MA_ZONES);
+      document.getElementById(valId).textContent  = (dist >= 0 ? '+' : '') + dist.toFixed(1) + '%';
+      const tag = document.getElementById(tagId);
+      tag.textContent  = z.label;
+      tag.style.color  = z.color;
+      const bar = document.getElementById(barId);
+      bar.className    = `progress-fill ${z.cls}`;
+      // Map dist range –50% → +100% onto 0–100% bar width
+      bar.style.width  = Math.min(100, Math.max(0, (dist + 50) / 150 * 100)).toFixed(1) + '%';
+    }
+
+    // ── Price card helpers ───────────────────────────────────────────
     function applyFng(value, classification) {
-      const fngLabelEl = document.getElementById('fngLabel');
-      const fngBarEl   = document.getElementById('fngBar');
-
       document.getElementById('fngValue').childNodes[0].textContent = value + ' ';
-      fngLabelEl.textContent = classification;
-      fngLabelEl.className = 'indicator-tag';
-      if      (value <= 25) fngLabelEl.classList.add('change-down');
-      else if (value <= 45) fngLabelEl.style.color = '#fb923c';
-      else if (value <= 55) fngLabelEl.style.color = '#facc15';
-      else                  fngLabelEl.classList.add('change-up');
+      const tag = document.getElementById('fngLabel');
+      tag.textContent = classification;
+      tag.className   = 'indicator-tag';
+      if      (value <= 25) tag.style.color = '#f87171';
+      else if (value <= 45) tag.style.color = '#fb923c';
+      else if (value <= 55) tag.style.color = '#facc15';
+      else                  tag.style.color = '#4ade80';
 
-      fngBarEl.style.width = value + '%';
-      fngBarEl.className = 'progress-fill';
-      if      (value <= 25) fngBarEl.classList.add('fill-red');
-      else if (value <= 45) fngBarEl.classList.add('fill-orange');
-      else if (value <= 55) fngBarEl.classList.add('fill-yellow');
-      else                  fngBarEl.classList.add('fill-green');
+      const bar = document.getElementById('fngBar');
+      bar.style.width = value + '%';
+      bar.className   = 'progress-fill';
+      if      (value <= 25) bar.classList.add('fill-red');
+      else if (value <= 45) bar.classList.add('fill-orange');
+      else if (value <= 55) bar.classList.add('fill-yellow');
+      else                  bar.classList.add('fill-green');
 
       const { phase, confluence } = derivePhaseAndConfluence(value);
       document.getElementById('confluenceScore').textContent = confluence + '%';
       document.getElementById('heatmapMarker').style.left    = value + '%';
-
       const badge = document.getElementById('phaseBadge');
-      badge.className = 'phase-badge';
-      const phaseMap = { bull: ['phase-bull', 'Bull'], bear: ['phase-bear', 'Bear'], neutral: ['phase-neutral', 'Neutral'] };
-      badge.classList.add(phaseMap[phase][0]);
+      const phaseMap = { bull: ['phase-bull','Bull'], bear: ['phase-bear','Bear'], neutral: ['phase-neutral','Neutral'] };
+      badge.className = 'phase-badge ' + phaseMap[phase][0];
       badge.textContent = phaseMap[phase][1];
-
       applySignal(phase, confluence);
     }
 
     function applyBtc(price, change) {
-      document.getElementById('btcPrice').textContent =
-        '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 });
+      document.getElementById('btcPrice').textContent = '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 });
       const el = document.getElementById('btcChange');
       el.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
       el.className = 'card-change ' + (change >= 0 ? 'change-up' : 'change-down');
     }
 
     function applySP(price, change) {
-      document.getElementById('spPrice').textContent =
-        price.toLocaleString('en-US', { maximumFractionDigits: 2 });
+      document.getElementById('spPrice').textContent = price.toLocaleString('en-US', { maximumFractionDigits: 2 });
       const el = document.getElementById('spChange');
       el.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
       el.className = 'card-change ' + (change >= 0 ? 'change-up' : 'change-down');
     }
 
     function applyGold(price, change) {
-      document.getElementById('goldPrice').textContent =
-        '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 });
+      document.getElementById('goldPrice').textContent = '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 });
       const el = document.getElementById('goldChange');
       el.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
       el.className = 'card-change ' + (change >= 0 ? 'change-up' : 'change-down');
     }
 
-    // ── API key for S&P 500 (Alpha Vantage — free at alphavantage.co) ─
-    const AV_KEY = '29GWL7D4NU80CS36';
+    function applyMacro(score, fedRate, inflation) {
+      const zones = [
+        { max: 25, label: 'Restrictive', cls: 'fill-red',    color: '#f87171' },
+        { max: 45, label: 'Tight',       cls: 'fill-orange',  color: '#fb923c' },
+        { max: 65, label: 'Neutral',     cls: 'fill-yellow',  color: '#facc15' },
+        { max: 101,label: 'Accommodative',cls:'fill-green',   color: '#4ade80' },
+      ];
+      const z = zoneFor(score, zones);
+      document.getElementById('macroVal').textContent = score;
+      const tag = document.getElementById('macroTag');
+      tag.textContent = `${z.label} · Rate ${fedRate.toFixed(1)}% · CPI ${inflation.toFixed(1)}%`;
+      tag.style.color = z.color;
+      const bar = document.getElementById('macroBar');
+      bar.className  = `progress-fill ${z.cls}`;
+      bar.style.width = score + '%';
+    }
 
-    // ── Fetch helpers ────────────────────────────────────────────────
-    // BTC + Gold in one CoinGecko call. pax-gold (PAXG) = 1 troy oz gold.
+    // ── Fetch: live prices (every 5 min) ─────────────────────────────
     async function fetchCryptoAndGold() {
       const res  = await fetch(
         'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,pax-gold&vs_currencies=usd&include_24hr_change=true',
@@ -631,24 +726,81 @@
     async function fetchFng() {
       const res  = await fetch('https://api.alternative.me/fng/', { cache: 'no-store' });
       const data = await res.json();
-      const entry = data.data[0];
-      applyFng(parseInt(entry.value, 10), entry.value_classification);
+      const e = data.data[0];
+      applyFng(parseInt(e.value, 10), e.value_classification);
     }
 
-    // SPY ETF tracks S&P 500 — % change is identical to ^GSPC.
-    // Refreshes once per hour to stay within Alpha Vantage free tier (25 calls/day).
+    // SPY price — every 90 min to stay within AV 25 calls/day limit
     async function fetchSP() {
-      if (AV_KEY === 'YOUR_ALPHA_VANTAGE_KEY') return;
       const res  = await fetch(
         `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=SPY&apikey=${AV_KEY}`,
         { cache: 'no-store' }
       );
       const data = await res.json();
       const q = data['Global Quote'];
-      if (!q || !q['05. price']) throw new Error('Alpha Vantage: unexpected response');
-      const price  = parseFloat(q['05. price']);
-      const change = parseFloat(q['10. change percent'].replace('%', ''));
-      applySP(price, change);
+      if (!q?.['05. price']) throw new Error('AV SPY: bad response');
+      applySP(parseFloat(q['05. price']), parseFloat(q['10. change percent'].replace('%', '')));
+    }
+
+    // ── Fetch: history (once on page load — daily indicators) ────────
+    async function fetchBtcHistory() {
+      const res  = await fetch(
+        'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=365&interval=daily',
+        { cache: 'no-store' }
+      );
+      const prices = (await res.json()).prices.map(p => p[1]);
+      applyRSI   ('btcRsiVal', 'btcRsiTag', 'btcRsiBar', calcRSI(prices));
+      applyMADist('btcMaVal',  'btcMaTag',  'btcMaBar',  calc200MADist(prices));
+    }
+
+    async function fetchGoldHistory() {
+      const res  = await fetch(
+        'https://api.coingecko.com/api/v3/coins/pax-gold/market_chart?vs_currency=usd&days=365&interval=daily',
+        { cache: 'no-store' }
+      );
+      const prices = (await res.json()).prices.map(p => p[1]);
+      applyRSI   ('goldRsiVal', 'goldRsiTag', 'goldRsiBar', calcRSI(prices));
+      applyMADist('goldMaVal',  'goldMaTag',  'goldMaBar',  calc200MADist(prices));
+    }
+
+    // SPY daily history — 1 AV call, derives RSI + 200MA for S&P
+    async function fetchSPHistory() {
+      const res  = await fetch(
+        `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&outputsize=full&apikey=${AV_KEY}`,
+        { cache: 'no-store' }
+      );
+      const ts = (await res.json())['Time Series (Daily)'];
+      if (!ts) throw new Error('AV SPY history: bad response');
+      // AV returns dates newest-first — reverse to chronological order
+      const prices = Object.values(ts).reverse().map(d => parseFloat(d['4. close']));
+      applyRSI   ('spRsiVal', 'spRsiTag', 'spRsiBar', calcRSI(prices));
+      applyMADist('spMaVal',  'spMaTag',  'spMaBar',  calc200MADist(prices));
+    }
+
+    // Fed Funds Rate + CPI → macro score 0–100
+    // Lower rates + lower inflation = higher score = more accommodative.
+    async function fetchMacroData() {
+      const rateRes = await fetch(
+        `https://www.alphavantage.co/query?function=FEDERAL_FUNDS_RATE&interval=monthly&apikey=${AV_KEY}`,
+        { cache: 'no-store' }
+      );
+      const rateData = await rateRes.json();
+      const fedRate  = parseFloat(rateData.data[0].value);
+
+      const cpiRes = await fetch(
+        `https://www.alphavantage.co/query?function=CPI&interval=monthly&apikey=${AV_KEY}`,
+        { cache: 'no-store' }
+      );
+      const cpiData  = await cpiRes.json();
+      const cpiNow   = parseFloat(cpiData.data[0].value);
+      const cpiPrev  = parseFloat(cpiData.data[12].value);
+      const inflation = (cpiNow - cpiPrev) / cpiPrev * 100;
+
+      const score = Math.min(100, Math.round(
+        Math.max(0, 50 - fedRate   * 10) +
+        Math.max(0, 50 - Math.max(0, inflation - 2) * 10)
+      ));
+      applyMacro(score, fedRate, inflation);
     }
 
     // ── Timestamp ────────────────────────────────────────────────────
@@ -659,20 +811,26 @@
     }
 
     // ── Refresh cycles ───────────────────────────────────────────────
-    // BTC, Gold, F&G: every 5 min. S&P: every 60 min (rate-limit safe).
     async function refresh() {
       await Promise.allSettled([fetchCryptoAndGold(), fetchFng()]);
       stampTime();
     }
 
-    async function refreshSP() {
-      await Promise.allSettled([fetchSP()]);
+    // History fetches run once on load — RSI/MA are daily indicators.
+    // AV budget: 16 SPY-price calls/day (every 90 min) + 3 history/macro = 19/day.
+    async function refreshHistory() {
+      await Promise.allSettled([fetchBtcHistory(), fetchGoldHistory()]);
+      // AV calls sequential to respect 5-calls/min rate limit
+      await Promise.allSettled([fetchSPHistory()]);
+      await Promise.allSettled([fetchMacroData()]);
     }
 
     refresh();
-    refreshSP();
-    setInterval(refresh,   5 * 60 * 1000);
-    setInterval(refreshSP, 60 * 60 * 1000);
+    fetchSP();
+    refreshHistory();
+
+    setInterval(refresh, 5  * 60 * 1000);
+    setInterval(fetchSP, 90 * 60 * 1000);
   </script>
 
 </body>
