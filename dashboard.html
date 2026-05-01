@@ -857,14 +857,43 @@
       applyMADist('btcMaVal',  'btcMaTag',  'btcMaBar',  calc200MADist(prices), 'btcMaDist');
     }
 
+    // Gold RSI + 200MA — Yahoo Finance GC=F (COMEX gold futures, continuous contract)
+    // via allorigins CORS proxy. GC=F tracks XAU spot with a small contango basis
+    // that is irrelevant for RSI/MA calculations.
     async function fetchGoldHistory() {
-      const res  = await fetch(
-        'https://api.coingecko.com/api/v3/coins/pax-gold/market_chart?vs_currency=usd&days=365&interval=daily',
-        { cache: 'no-store' }
-      );
-      const prices = (await res.json()).prices.map(p => p[1]);
-      applyRSI   ('goldRsiVal', 'goldRsiTag', 'goldRsiBar', calcRSI(prices),       'goldRsi');
-      applyMADist('goldMaVal',  'goldMaTag',  'goldMaBar',  calc200MADist(prices), 'goldMaDist');
+      const CACHE_RSI = 'gold_rsi', CACHE_MA = 'gold_ma', MAX_AGE = 8 * 3600000;
+      try {
+        const yahooUrl = 'https://query2.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=1y';
+        const res  = await fetch(
+          'https://api.allorigins.win/raw?url=' + encodeURIComponent(yahooUrl),
+          { cache: 'no-store' }
+        );
+        const data   = await res.json();
+        const result = data?.chart?.result?.[0];
+        if (!result) throw new Error('Yahoo Finance GC=F: no chart result');
+        const closes = result.indicators.quote[0].close.filter(v => v != null);
+        if (closes.length < 30) throw new Error('Yahoo Finance GC=F: insufficient data');
+
+        const rsi  = calcRSI(closes);
+        const dist = calc200MADist(closes);
+        if (rsi  !== null) { applyRSI   ('goldRsiVal', 'goldRsiTag', 'goldRsiBar', rsi,  'goldRsi');   saveCache(CACHE_RSI, rsi);  }
+        if (dist !== null) { applyMADist('goldMaVal',  'goldMaTag',  'goldMaBar',  dist, 'goldMaDist'); saveCache(CACHE_MA,  dist); }
+      } catch (e) {
+        const cachedRsi = loadCache(CACHE_RSI, MAX_AGE);
+        if (cachedRsi !== null) {
+          applyRSI('goldRsiVal', 'goldRsiTag', 'goldRsiBar', cachedRsi, 'goldRsi');
+          document.getElementById('goldRsiTag').textContent += ' (cached)';
+        } else {
+          showIndicatorError('goldRsiTag', 'Unavailable');
+        }
+        const cachedMa = loadCache(CACHE_MA, MAX_AGE);
+        if (cachedMa !== null) {
+          applyMADist('goldMaVal', 'goldMaTag', 'goldMaBar', cachedMa, 'goldMaDist');
+          document.getElementById('goldMaTag').textContent += ' (cached)';
+        } else {
+          showIndicatorError('goldMaTag', 'Unavailable');
+        }
+      }
     }
 
     // MVRV + Puell Multiple from CoinMetrics community API (free, no key)
