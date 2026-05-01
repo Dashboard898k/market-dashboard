@@ -205,6 +205,37 @@
     .signal-tp   .signal-pct { background: #2d0a0a; color: #f87171; }
     .signal-wait .signal-pct { background: #1c1a07; color: #facc15; }
 
+    /* ── Big Pete's Cycle Read ── */
+    .cycle-read-block {
+      border-radius: 16px;
+      padding: 1.25rem;
+      margin-bottom: 2rem;
+      border: 1px solid;
+      transition: background 0.4s, border-color 0.4s;
+    }
+
+    .cycle-read-bull    { background: #031a0e; border-color: #166534; }
+    .cycle-read-bear    { background: #200a0a; border-color: #7f1d1d; }
+    .cycle-read-neutral { background: #1a1500; border-color: #713f12; }
+
+    .cycle-read-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.6rem;
+    }
+
+    .cycle-read-bull    .cycle-read-label { color: #4ade80; }
+    .cycle-read-bear    .cycle-read-label { color: #f87171; }
+    .cycle-read-neutral .cycle-read-label { color: #facc15; }
+
+    .cycle-read-text {
+      font-size: 0.88rem;
+      line-height: 1.65;
+      color: #cbd5e1;
+    }
+
     /* ── Confluence section ── */
     .confluence-block {
       background-color: #111111;
@@ -434,6 +465,12 @@
     </div>
   </div>
 
+  <!-- Big Pete's Cycle Read -->
+  <div class="cycle-read-block cycle-read-neutral" id="cycleReadBox">
+    <div class="cycle-read-label">Big Pete's Cycle Read</div>
+    <p class="cycle-read-text" id="cycleReadText">Loading indicators…</p>
+  </div>
+
   <!-- Indicators -->
   <p class="section-label" style="margin-top: 1.5rem;">Indicators</p>
 
@@ -611,6 +648,61 @@
       }
     }
 
+    function updateCycleRead(phase, confluence) {
+      const s = [];
+
+      // Pi Cycle — always produces a sentence once loaded
+      if (state.piCycle !== null) {
+        const pct = state.piCycle * 100;
+        if (pct < 50)
+          s.push("The Pi Cycle indicator is nowhere near a top — historical data suggests significant upside potential remains.");
+        else if (pct < 75)
+          s.push("The Pi Cycle indicator is approaching top territory — consider gradually reducing position size.");
+        else
+          s.push("The Pi Cycle indicator is in the danger zone — a cycle top signal is approaching and taking profit is advised.");
+      }
+
+      // Fear & Greed — only when extreme
+      if (state.fng !== null) {
+        if (state.fng < 25)
+          s.push("The market is in extreme fear — historically this has been a strong accumulation opportunity.");
+        else if (state.fng > 75)
+          s.push("The market is extremely greedy — cycle top risk is elevated.");
+      }
+
+      // BTC RSI — only when notable
+      if (state.btcRsi !== null) {
+        if (state.btcRsi < 45)
+          s.push("BTC momentum is weak with RSI below 45 — this looks like a solid DCA entry.");
+        else if (state.btcRsi > 70)
+          s.push("BTC momentum is overextended with RSI above 70 — consider taking some profit.");
+      }
+
+      // Yield curve — only when inverted
+      if (state.yieldCurve !== null && state.yieldCurve < 0)
+        s.push("The yield curve is inverted — a recession warning is active, so exercise caution with risk assets.");
+
+      // VIX — only when notable
+      if (state.vix !== null) {
+        if (state.vix > 30)
+          s.push("VIX is elevated above 30 — high market fear has historically marked strong DCA opportunities.");
+        else if (state.vix < 20)
+          s.push("VIX is low — markets are complacent, stay alert for sudden pullbacks.");
+      }
+
+      // Overall conviction
+      if (confluence < 30)
+        s.push("Signals are mixed overall — wait for clearer direction before making large moves.");
+      else if (confluence > 70)
+        s.push("Signal conviction is strong — act with confidence in the direction indicated.");
+
+      document.getElementById('cycleReadText').textContent =
+        s.length ? s.join(' ') : 'Loading indicators…';
+
+      const box = document.getElementById('cycleReadBox');
+      box.className = 'cycle-read-block cycle-read-' + phase;
+    }
+
     function recalcConfluence() {
       const scores = Object.entries(state)
         .filter(([, v]) => v !== null)
@@ -634,6 +726,7 @@
       badge.textContent = phaseMap[phase][1];
 
       applySignal(phase, confluence);
+      updateCycleRead(phase, confluence);
     }
 
     // ── Filter buttons ───────────────────────────────────────────────
