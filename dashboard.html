@@ -550,6 +550,59 @@
       if (el) { el.textContent = msg; el.style.color = '#475569'; }
     }
 
+    // ── Reactive confluence state ────────────────────────────────────
+    // Each indicator writes its raw value here, then calls recalcConfluence().
+    const state = {
+      fng: null, btcRsi: null, btcMaDist: null,
+      mvrv: null, puell: null,
+      spRsi: null, spMaDist: null,
+      goldRsi: null, goldMaDist: null,
+      macro: null,
+    };
+
+    // Normalise every indicator onto a 0–100 bull/bear scale:
+    // 0 = maximum bear (DCA zone), 100 = maximum bull (take-profit zone).
+    function normalizeIndicator(key, val) {
+      switch (key) {
+        case 'fng':
+        case 'btcRsi': case 'spRsi': case 'goldRsi':
+        case 'macro':
+          return val;                                           // already 0-100
+        case 'btcMaDist': case 'spMaDist': case 'goldMaDist':
+          return Math.min(100, Math.max(0, (val + 50) / 1.5)); // –50%→0, 0→33, +100→100
+        case 'mvrv':
+          return Math.min(100, Math.max(0, (val / 4.0) * 100));  // 0→0, 4→100
+        case 'puell':
+          return Math.min(100, Math.max(0, (val / 5.0) * 100));  // 0→0, 5→100
+        default: return val;
+      }
+    }
+
+    function recalcConfluence() {
+      const scores = Object.entries(state)
+        .filter(([, v]) => v !== null)
+        .map(([k, v]) => normalizeIndicator(k, v));
+      if (scores.length === 0) return;
+
+      const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
+      const phase = avg >= 60 ? 'bull' : avg <= 40 ? 'bear' : 'neutral';
+      const confluence = Math.min(100, Math.round(Math.abs(avg - 50) * 2));
+
+      document.getElementById('confluenceScore').textContent = confluence + '%';
+      document.getElementById('heatmapMarker').style.left    = avg.toFixed(1) + '%';
+
+      const phaseMap = {
+        bull:    ['phase-bull',    'Bull'],
+        bear:    ['phase-bear',    'Bear'],
+        neutral: ['phase-neutral', 'Neutral'],
+      };
+      const badge = document.getElementById('phaseBadge');
+      badge.className   = 'phase-badge ' + phaseMap[phase][0];
+      badge.textContent = phaseMap[phase][1];
+
+      applySignal(phase, confluence);
+    }
+
     // ── Filter buttons ───────────────────────────────────────────────
     const filtersEl = document.querySelector('.filters');
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -614,11 +667,6 @@
       document.getElementById('signalPct').textContent    = s.pct;
     }
 
-    function derivePhaseAndConfluence(fng) {
-      const phase = fng <= 40 ? 'bear' : fng >= 60 ? 'bull' : 'neutral';
-      return { phase, confluence: Math.min(100, Math.round(Math.abs(fng - 50) * 2)) };
-    }
-
     // ── Indicator DOM helpers ────────────────────────────────────────
     const RSI_ZONES = [
       { max: 30, label: 'Oversold',   cls: 'fill-red',    color: '#f87171' },
@@ -640,7 +688,7 @@
       return zones.find(z => value < z.max) ?? zones[zones.length - 1];
     }
 
-    function applyRSI(valId, tagId, barId, rsi) {
+    function applyRSI(valId, tagId, barId, rsi, stateKey) {
       if (rsi === null) return;
       const z = zoneFor(rsi, RSI_ZONES);
       document.getElementById(valId).textContent   = Math.round(rsi);
@@ -650,9 +698,10 @@
       const bar = document.getElementById(barId);
       bar.className    = `progress-fill ${z.cls}`;
       bar.style.width  = rsi.toFixed(1) + '%';
+      if (stateKey) { state[stateKey] = rsi; recalcConfluence(); }
     }
 
-    function applyMADist(valId, tagId, barId, dist) {
+    function applyMADist(valId, tagId, barId, dist, stateKey) {
       if (dist === null) return;
       const z = zoneFor(dist, MA_ZONES);
       document.getElementById(valId).textContent  = (dist >= 0 ? '+' : '') + dist.toFixed(1) + '%';
@@ -661,8 +710,8 @@
       tag.style.color  = z.color;
       const bar = document.getElementById(barId);
       bar.className    = `progress-fill ${z.cls}`;
-      // Map dist range –50% → +100% onto 0–100% bar width
       bar.style.width  = Math.min(100, Math.max(0, (dist + 50) / 150 * 100)).toFixed(1) + '%';
+      if (stateKey) { state[stateKey] = dist; recalcConfluence(); }
     }
 
     // ── Price card helpers ───────────────────────────────────────────
@@ -684,14 +733,8 @@
       else if (value <= 55) bar.classList.add('fill-yellow');
       else                  bar.classList.add('fill-green');
 
-      const { phase, confluence } = derivePhaseAndConfluence(value);
-      document.getElementById('confluenceScore').textContent = confluence + '%';
-      document.getElementById('heatmapMarker').style.left    = value + '%';
-      const badge = document.getElementById('phaseBadge');
-      const phaseMap = { bull: ['phase-bull','Bull'], bear: ['phase-bear','Bear'], neutral: ['phase-neutral','Neutral'] };
-      badge.className = 'phase-badge ' + phaseMap[phase][0];
-      badge.textContent = phaseMap[phase][1];
-      applySignal(phase, confluence);
+      state.fng = value;
+      recalcConfluence();
     }
 
     function applyBtc(price, change) {
@@ -730,6 +773,7 @@
       const bar = document.getElementById('macroBar');
       bar.className  = `progress-fill ${z.cls}`;
       bar.style.width = score + '%';
+      state.macro = score; recalcConfluence();
     }
 
     // ── Fetch: live prices (every 5 min) ─────────────────────────────
@@ -779,6 +823,7 @@
       const bar = document.getElementById('mvrvBar');
       bar.className  = `progress-fill ${z.cls}`;
       bar.style.width = Math.min(100, (value / 4.0) * 100).toFixed(1) + '%';
+      state.mvrv = value; recalcConfluence();
     }
 
     // Puell Multiple: daily miner revenue ÷ 365-day MA of miner revenue
@@ -798,6 +843,7 @@
       const bar = document.getElementById('puellBar');
       bar.className  = `progress-fill ${z.cls}`;
       bar.style.width = Math.min(100, (value / 5.0) * 100).toFixed(1) + '%';
+      state.puell = value; recalcConfluence();
     }
 
     // ── Fetch: history (once on page load — daily indicators) ────────
@@ -807,8 +853,8 @@
         { cache: 'no-store' }
       );
       const prices = (await res.json()).prices.map(p => p[1]);
-      applyRSI   ('btcRsiVal', 'btcRsiTag', 'btcRsiBar', calcRSI(prices));
-      applyMADist('btcMaVal',  'btcMaTag',  'btcMaBar',  calc200MADist(prices));
+      applyRSI   ('btcRsiVal', 'btcRsiTag', 'btcRsiBar', calcRSI(prices),       'btcRsi');
+      applyMADist('btcMaVal',  'btcMaTag',  'btcMaBar',  calc200MADist(prices), 'btcMaDist');
     }
 
     async function fetchGoldHistory() {
@@ -817,8 +863,8 @@
         { cache: 'no-store' }
       );
       const prices = (await res.json()).prices.map(p => p[1]);
-      applyRSI   ('goldRsiVal', 'goldRsiTag', 'goldRsiBar', calcRSI(prices));
-      applyMADist('goldMaVal',  'goldMaTag',  'goldMaBar',  calc200MADist(prices));
+      applyRSI   ('goldRsiVal', 'goldRsiTag', 'goldRsiBar', calcRSI(prices),       'goldRsi');
+      applyMADist('goldMaVal',  'goldMaTag',  'goldMaBar',  calc200MADist(prices), 'goldMaDist');
     }
 
     // MVRV + Puell Multiple from CoinMetrics community API (free, no key)
@@ -855,12 +901,12 @@
         const prices = Object.values(ts).reverse().map(d => parseFloat(d['4. close']));
         const rsi    = calcRSI(prices);
         if (rsi === null) throw new Error('not enough data');
-        applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', rsi);
+        applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', rsi, 'spRsi');
         saveCache(CACHE_KEY, rsi);
       } catch (e) {
         const cached = loadCache(CACHE_KEY, MAX_AGE);
         if (cached !== null) {
-          applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', cached);
+          applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', cached, 'spRsi');
           document.getElementById('spRsiTag').textContent += ' (cached)';
         } else {
           showIndicatorError('spRsiTag', 'Rate limited — retry later');
@@ -882,12 +928,12 @@
         const prices = Object.values(ts).slice(0, 250).reverse().map(d => parseFloat(d['4. close']));
         const ma40   = prices.slice(-40).reduce((s, p) => s + p, 0) / 40;
         const dist   = ((prices[prices.length - 1] - ma40) / ma40) * 100;
-        applyMADist('spMaVal', 'spMaTag', 'spMaBar', dist);
+        applyMADist('spMaVal', 'spMaTag', 'spMaBar', dist, 'spMaDist');
         saveCache(CACHE_KEY, dist);
       } catch (e) {
         const cached = loadCache(CACHE_KEY, MAX_AGE);
         if (cached !== null) {
-          applyMADist('spMaVal', 'spMaTag', 'spMaBar', cached);
+          applyMADist('spMaVal', 'spMaTag', 'spMaBar', cached, 'spMaDist');
           document.getElementById('spMaTag').textContent += ' (cached)';
         } else {
           showIndicatorError('spMaTag', 'Rate limited — retry later');
