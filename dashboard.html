@@ -887,56 +887,40 @@
       applyPuell(issVals[issVals.length - 1] / ma365);
     }
 
-    // S&P RSI — AV compact daily (100 bars, free tier, enough for RSI-14)
-    async function fetchSPRsi() {
-      const CACHE_KEY = 'sp_rsi', MAX_AGE = 8 * 3600000;
+    // S&P RSI + 200MA — Yahoo Finance 1-year daily chart via allorigins CORS proxy.
+    // One request gives ~252 trading days: enough for RSI-14 and 200-day MA.
+    async function fetchSPHistory() {
+      const CACHE_RSI = 'sp_rsi', CACHE_MA = 'sp_ma', MAX_AGE = 8 * 3600000;
       try {
+        const yahooUrl = 'https://query2.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=1y';
         const res  = await fetch(
-          `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&outputsize=compact&apikey=${AV_KEY}`,
+          'https://api.allorigins.win/raw?url=' + encodeURIComponent(yahooUrl),
           { cache: 'no-store' }
         );
-        const data = await res.json();
-        const ts   = data['Time Series (Daily)'];
-        if (!ts) throw new Error(data.Note || data.Information || 'no Time Series');
-        const prices = Object.values(ts).reverse().map(d => parseFloat(d['4. close']));
-        const rsi    = calcRSI(prices);
-        if (rsi === null) throw new Error('not enough data');
-        applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', rsi, 'spRsi');
-        saveCache(CACHE_KEY, rsi);
+        const data   = await res.json();
+        const result = data?.chart?.result?.[0];
+        if (!result) throw new Error('Yahoo Finance: no chart result');
+        const closes = result.indicators.quote[0].close.filter(v => v != null);
+        if (closes.length < 30) throw new Error('Yahoo Finance: insufficient data');
+
+        const rsi  = calcRSI(closes);
+        const dist = calc200MADist(closes);
+        if (rsi  !== null) { applyRSI   ('spRsiVal', 'spRsiTag', 'spRsiBar', rsi,  'spRsi');   saveCache(CACHE_RSI, rsi);  }
+        if (dist !== null) { applyMADist('spMaVal',  'spMaTag',  'spMaBar',  dist, 'spMaDist'); saveCache(CACHE_MA,  dist); }
       } catch (e) {
-        const cached = loadCache(CACHE_KEY, MAX_AGE);
-        if (cached !== null) {
-          applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', cached, 'spRsi');
+        const cachedRsi = loadCache(CACHE_RSI, MAX_AGE);
+        if (cachedRsi !== null) {
+          applyRSI('spRsiVal', 'spRsiTag', 'spRsiBar', cachedRsi, 'spRsi');
           document.getElementById('spRsiTag').textContent += ' (cached)';
         } else {
-          showIndicatorError('spRsiTag', 'Rate limited — retry later');
+          showIndicatorError('spRsiTag', 'Unavailable');
         }
-      }
-    }
-
-    // S&P 200MA — AV weekly (40-week MA = 200-day MA equivalent, free tier)
-    async function fetchSPMa() {
-      const CACHE_KEY = 'sp_ma', MAX_AGE = 8 * 3600000;
-      try {
-        const res  = await fetch(
-          `https://www.alphavantage.co/query?function=TIME_SERIES_WEEKLY&symbol=SPY&apikey=${AV_KEY}`,
-          { cache: 'no-store' }
-        );
-        const data = await res.json();
-        const ts   = data['Weekly Time Series'];
-        if (!ts) throw new Error(data.Note || data.Information || 'no Weekly Time Series');
-        const prices = Object.values(ts).slice(0, 250).reverse().map(d => parseFloat(d['4. close']));
-        const ma40   = prices.slice(-40).reduce((s, p) => s + p, 0) / 40;
-        const dist   = ((prices[prices.length - 1] - ma40) / ma40) * 100;
-        applyMADist('spMaVal', 'spMaTag', 'spMaBar', dist, 'spMaDist');
-        saveCache(CACHE_KEY, dist);
-      } catch (e) {
-        const cached = loadCache(CACHE_KEY, MAX_AGE);
-        if (cached !== null) {
-          applyMADist('spMaVal', 'spMaTag', 'spMaBar', cached, 'spMaDist');
+        const cachedMa = loadCache(CACHE_MA, MAX_AGE);
+        if (cachedMa !== null) {
+          applyMADist('spMaVal', 'spMaTag', 'spMaBar', cachedMa, 'spMaDist');
           document.getElementById('spMaTag').textContent += ' (cached)';
         } else {
-          showIndicatorError('spMaTag', 'Rate limited — retry later');
+          showIndicatorError('spMaTag', 'Unavailable');
         }
       }
     }
@@ -995,17 +979,17 @@
       stampTime();
     }
 
-    // AV free tier: 25 calls/day, 5 calls/min.
-    // fetchSP fires at T=0 (1 AV call). Stagger the remaining 4 AV calls 15s apart
-    // so they never bunch up: T≈15s RSI, T≈30s MA, T≈45s macro rate, T≈47s macro CPI.
+    // S&P history now uses Yahoo Finance via CORS proxy (no AV quota used).
+    // AV startup budget: fetchSP (T=0) + macro rate (T=1s) + macro CPI (T=3s) = 3 calls — fine.
     async function refreshHistory() {
-      await Promise.allSettled([fetchBtcHistory(), fetchGoldHistory(), fetchOnChain()]);
-      await sleep(15000);
-      await fetchSPRsi();
-      await sleep(15000);
-      await fetchSPMa();
-      await sleep(15000);
-      await fetchMacroData();
+      const macroDelayed = sleep(1000).then(() => fetchMacroData());
+      await Promise.allSettled([
+        fetchBtcHistory(),
+        fetchGoldHistory(),
+        fetchOnChain(),
+        fetchSPHistory(),
+        macroDelayed,
+      ]);
     }
 
     refresh();
