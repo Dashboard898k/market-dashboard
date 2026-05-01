@@ -1033,55 +1033,78 @@
       applyPuell(issVals[issVals.length - 1] / ma365);
     }
 
-    // VIX — CBOE Volatility Index via Yahoo Finance ^VIX
+    // VIX — tries allorigins then corsproxy.io. Uses literal ^ so encodeURIComponent
+    // produces a clean single-encoded %5E rather than the double-encoded %255E that
+    // the pre-encoded string caused.
     async function fetchVix() {
       const CACHE_KEY = 'vix', MAX_AGE = 6 * 3600000;
+      const yahooUrl  = 'https://query2.finance.yahoo.com/v8/finance/chart/^VIX?interval=1d&range=5d';
+      const parse     = d => d?.chart?.result?.[0]?.meta?.regularMarketPrice ?? null;
+
+      let vix = null;
       try {
-        const yahooUrl = 'https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=5d';
-        const res  = await fetch(
-          'https://api.allorigins.win/raw?url=' + encodeURIComponent(yahooUrl),
-          { cache: 'no-store' }
-        );
-        const data = await res.json();
-        const vix  = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        if (!vix) throw new Error('VIX: no data');
-        applyVix(vix);
-        saveCache(CACHE_KEY, vix);
-      } catch (e) {
-        const cached = loadCache(CACHE_KEY, MAX_AGE);
-        if (cached !== null) {
-          applyVix(cached);
-          document.getElementById('vixTag').textContent += ' (cached)';
-        } else {
-          showIndicatorError('vixTag', 'Unavailable');
-        }
+        const res = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(yahooUrl), { cache: 'no-store' });
+        vix = parse(await res.json());
+      } catch (_) {}
+
+      if (!vix) {
+        try {
+          const res = await fetch('https://corsproxy.io/?' + encodeURIComponent(yahooUrl), { cache: 'no-store' });
+          vix = parse(await res.json());
+        } catch (_) {}
+      }
+
+      if (vix) { applyVix(vix); saveCache(CACHE_KEY, vix); return; }
+
+      const cached = loadCache(CACHE_KEY, MAX_AGE);
+      if (cached !== null) {
+        applyVix(cached);
+        document.getElementById('vixTag').textContent += ' (cached)';
+      } else {
+        showIndicatorError('vixTag', 'Unavailable');
       }
     }
 
-    // Yield curve — ^TNX (10-year) minus ^IRX (3-month) Treasury yields via Yahoo Finance
+    // Yield curve — ^TNX (10-year) minus ^IRX (3-month). Same dual-proxy pattern as VIX.
     async function fetchYieldCurve() {
       const CACHE_KEY = 'yield_curve', MAX_AGE = 6 * 3600000;
-      try {
-        const proxy = url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
-        const [tnxRes, irxRes] = await Promise.all([
-          fetch(proxy('https://query2.finance.yahoo.com/v8/finance/chart/%5ETNX?interval=1d&range=5d'), { cache: 'no-store' }),
-          fetch(proxy('https://query2.finance.yahoo.com/v8/finance/chart/%5EIRX?interval=1d&range=5d'), { cache: 'no-store' }),
+      const tnxUrl = 'https://query2.finance.yahoo.com/v8/finance/chart/^TNX?interval=1d&range=5d';
+      const irxUrl = 'https://query2.finance.yahoo.com/v8/finance/chart/^IRX?interval=1d&range=5d';
+      const getPrice = d => d?.chart?.result?.[0]?.meta?.regularMarketPrice ?? null;
+
+      const tryProxy = async proxyFn => {
+        const [tr, ir] = await Promise.all([
+          fetch(proxyFn(tnxUrl), { cache: 'no-store' }),
+          fetch(proxyFn(irxUrl), { cache: 'no-store' }),
         ]);
-        const [tnxData, irxData] = await Promise.all([tnxRes.json(), irxRes.json()]);
-        const rate10y = tnxData?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        const rate3m  = irxData?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        if (!rate10y || !rate3m) throw new Error('Yield curve: missing data');
+        const [td, id] = await Promise.all([tr.json(), ir.json()]);
+        return { rate10y: getPrice(td), rate3m: getPrice(id) };
+      };
+
+      let rate10y = null, rate3m = null;
+      try {
+        ({ rate10y, rate3m } = await tryProxy(u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)));
+      } catch (_) {}
+
+      if (!rate10y || !rate3m) {
+        try {
+          ({ rate10y, rate3m } = await tryProxy(u => 'https://corsproxy.io/?' + encodeURIComponent(u)));
+        } catch (_) {}
+      }
+
+      if (rate10y && rate3m) {
         const spread = rate10y - rate3m;
         applyYieldCurve(spread, rate10y, rate3m);
         saveCache(CACHE_KEY, { spread, rate10y, rate3m });
-      } catch (e) {
-        const cached = loadCache(CACHE_KEY, MAX_AGE);
-        if (cached !== null) {
-          applyYieldCurve(cached.spread, cached.rate10y, cached.rate3m);
-          document.getElementById('yieldCurveTag').textContent += ' (cached)';
-        } else {
-          showIndicatorError('yieldCurveTag', 'Unavailable');
-        }
+        return;
+      }
+
+      const cached = loadCache(CACHE_KEY, MAX_AGE);
+      if (cached !== null) {
+        applyYieldCurve(cached.spread, cached.rate10y, cached.rate3m);
+        document.getElementById('yieldCurveTag').textContent += ' (cached)';
+      } else {
+        showIndicatorError('yieldCurveTag', 'Unavailable');
       }
     }
 
